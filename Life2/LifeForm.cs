@@ -21,7 +21,7 @@ namespace Life2
         private readonly TextBox infoBox;
         private readonly Thread worldThread;
         
-        private bool drawStyle = true;
+        private DrawType drawStyle = DrawType.Food;
         private string txt = "";
         private int lensX = -1;
         private int lensY = -1;
@@ -127,7 +127,7 @@ namespace Life2
             lensBitmap = new Bitmap(200, 200);
             lensX = e.X / Life.BotSize;
             lensY = e.Y / Life.BotSize;
-            world.DrawLens(lensBitmap, e.X / Life.BotSize, e.Y / Life.BotSize);
+            world.DrawLens(lensBitmap, e.X / Life.BotSize, e.Y / Life.BotSize, drawStyle);
             lensPictureBox.Image = lensBitmap;
         }
 
@@ -139,8 +139,8 @@ namespace Life2
         
         private void DrawStyle(object sender, EventArgs e)
         {
-            drawStyle = !drawStyle;
-            buttonDrawStyle.Text = drawStyle ? "Food" : "Energy";
+            drawStyle = drawStyle == DrawType.Energy ? DrawType.Food : DrawType.Energy;
+            buttonDrawStyle.Text = $"{drawStyle}";
         }
         
         private void OnTimerDraw(object sender, EventArgs e)

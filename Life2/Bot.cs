@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Drawing;
 using System.Linq;
-using System.Security.Cryptography;
 
 namespace Life2
 {
@@ -72,20 +71,20 @@ namespace Life2
         /// </summary>
         public readonly int[] gene;
 
-        public Bot(World w, int x, int y, int[] gene)
+        public Bot(World world, int x, int y, int[] gene)
         {
-            world = w;
+            this.world = world;
             energy = 10;
             minerals = 0;
             health = 10;
             coordinates = (x, y);
             this.gene = gene;
-            direction = world.Random(0, 7);
+            direction = this.world.Random(0, 7);
         }
 
-        public void Live(int lastIter)
+        public void Live(int lastIteration)
         {
-            lastIteration = lastIter;
+            this.lastIteration = lastIteration;
             age++;
 
             instructionPointer = 0;
@@ -110,8 +109,8 @@ namespace Life2
                         //Фотосинтез
                         case 25:
                         {
-                            energy += FotFromCoord(coordinates.y, height);
-                            sunEating += FotFromCoord(coordinates.y, height);
+                            energy += FotFromCoordinates(coordinates.y, height);
+                            sunEating += FotFromCoordinates(coordinates.y, height);
                             instructionPointer++;
                             steps++;
                             break;
@@ -139,7 +138,7 @@ namespace Life2
                                 instructionPointer += 6;
                             else if (world.map[x][y] == 0)
                                 instructionPointer += 1;
-                            else if (world.map[x][y] == 1)
+                            else if (world.map[x][y] == ObjectType.Food)
                                 instructionPointer += 2;
                             else if (IsKin(world.bots[x][y]))
                                 instructionPointer += 3;
@@ -172,15 +171,15 @@ namespace Life2
                         {
                             energy -= 5;
                             var (x, y) = LookAt();
-                            if (!IsBlocked(x, y) && world.map[x][y] != 2)
+                            if (!IsBlocked(x, y) && world.map[x][y] != ObjectType.Bot)
                             {
-                                if (world.map[x][y] == 1)
+                                if (world.map[x][y] == ObjectType.Food)
                                 {
                                     orgEating += 20;
                                     energy += 20;
                                 }
 
-                                world.map[x][y] = 2;
+                                world.map[x][y] = ObjectType.Bot;
                                 world.map[coordinates.x][coordinates.y] = 0;
 
                                 world.bots[x][y] = this;
@@ -198,11 +197,11 @@ namespace Life2
                         {
                             var (x, y) = LookAt();
                             energy -= 5;
-                            if (!IsBlocked(x, y) && world.map[x][y] == 2)
+                            if (!IsBlocked(x, y) && world.map[x][y] == ObjectType.Bot)
                             {
                                 world.bots[x][y].Attack(20);
                                 energy += 10;
-                                if (world.map[x][y] == 1)
+                                if (world.map[x][y] == ObjectType.Food)
                                     kills++;
                             }
 
@@ -217,7 +216,7 @@ namespace Life2
                             steps += 15;
 
                             var (x, y) = LookAt();
-                            if (!IsBlocked(x, y) && world.map[x][y] == 1)
+                            if (!IsBlocked(x, y) && world.map[x][y] == ObjectType.Food)
                             {
                                 world.map[x][y] = 0;
                                 energy += 20;
@@ -257,7 +256,7 @@ namespace Life2
                             steps += 15;
 
                             var (x, y) = LookAt();
-                            if (!IsBlocked(x, y) && world.map[x][y] == 2)
+                            if (!IsBlocked(x, y) && world.map[x][y] == ObjectType.Bot)
                             {
                                 world.bots[x][y].energy += 5;
                                 energy -= 5;
@@ -269,11 +268,8 @@ namespace Life2
                         //Убивает себя
                         case 35:
                         {
-                            steps += 10000;
-
-                            world.map[coordinates.x][coordinates.y] = 1;
-                            world.bots[coordinates.x][coordinates.y] = null;
-                            break;
+                            Die();
+                            return;
                         }
                         //Разрушает блок стены
                         case 36:
@@ -285,7 +281,7 @@ namespace Life2
                                 break;
 
                             var (x, y) = LookAt();
-                            if (y >= 0 && y < height && world.map[x][y] == 3)
+                            if (y >= 0 && y < height && world.map[x][y] == ObjectType.Wall)
                             {
                                 world.map[x][y] = 0;
                                 minerals += 11;
@@ -306,7 +302,7 @@ namespace Life2
                                 var (x, y) = LookAt();
                                 if (y >= 0 && y < height && world.map[x][y] == 0)
                                 {
-                                    world.map[x][y] = 3;
+                                    world.map[x][y] = ObjectType.Wall;
                                     minerals -= 10;
                                 }
                             }
@@ -333,7 +329,7 @@ namespace Life2
                             instructionPointer += 1;
                             steps += 1;
 
-                            minerals += MinFromCoord(coordinates.y, height);
+                            minerals += MinFromCoordinates(coordinates.y, height);
                             if (minerals > 100)
                                 minerals = 100;
 
@@ -358,36 +354,32 @@ namespace Life2
 
                     if (health <= 0 || energy <= 0)
                     {
-                        steps += 15;
-                        world.map[coordinates.x][coordinates.y] = 1;
-                        world.bots[coordinates.x][coordinates.y] = null;
+                        Die();
+                        return;
                     }
                 }
             }
 
             if (health <= 0 || energy <= 0 || age > 50)
-            {
-                world.map[coordinates.x][coordinates.y] = 1;
-                world.bots[coordinates.x][coordinates.y] = null;
-            }
+                Die();
         }
 
-        private bool IsKin(Bot b) => GetKinship(b) < 10;
+        private bool IsKin(Bot bot) => GetKinship(bot) < 10;
 
-        public int GetKinship(Bot b)
+        public int GetKinship(Bot bot)
         {
             var k = 0;
             for (var i = 0; i < 64; i++)
-                if (gene[i] != b.gene[i])
+                if (gene[i] != bot.gene[i])
                     k++;
             return k;
         }
 
-        private (int x, int y) LookAt(int d)
+        private (int x, int y) LookAt(int direction)
         {
             var width = world.GetWidth;
-            var x = coordinates.x + (int) Math.Round(Math.Cos(Math.PI * 0.25 * d));
-            var y = coordinates.y - (int) Math.Round(Math.Sin(Math.PI * 0.25 * d));
+            var x = coordinates.x + (int) Math.Round(Math.Cos(Math.PI * 0.25 * direction));
+            var y = coordinates.y - (int) Math.Round(Math.Sin(Math.PI * 0.25 * direction));
 
             x = (x + width) % width;
 
@@ -417,32 +409,35 @@ namespace Life2
             if (world.Random(0, 2) == 0)
                 babyGene[world.Random(0, World.GeneLength - 1)] = world.Random(0, World.GeneLength - 1);
 
-            world.map[x][y] = 2;
+            world.map[x][y] = ObjectType.Bot;
             world.bots[x][y] = new Bot(world, x, y, babyGene);
             
             return true;
+        }
+
+        private void Die()
+        {
+            world.map[coordinates.x][coordinates.y] = ObjectType.Food;
+            world.bots[coordinates.x][coordinates.y] = null;
         }
 
         private void Attack(int dmg)
         {
             health -= dmg;
             if (health <= 0)
-            {
-                world.map[coordinates.x][coordinates.y] = 1;
-                world.bots[coordinates.x][coordinates.y] = null;
-            }
+                Die();
         }
 
         private bool IsBlocked(int x, int y)
-            => y >= world.GetHeight || y < 0 || world.map[x][y] == 3;
+            => y >= world.GetHeight || y < 0 || world.map[x][y] == ObjectType.Wall;
 
         private static int ToBounds(int value, int from, int to)
             => value > to ? to : value < from ? from : value;
         
-        public Color GetColor(bool drawStyle)
+        public Color GetColor(DrawType drawStyle)
         {
-            int r, g, b;
-            if (drawStyle)
+            int r = 0, g = 0, b = 0;
+            if (drawStyle == DrawType.Food)
             {
                 r = (int) Math.Round(orgEating * 9.0);
                 r = ToBounds(r, 0, 255);
@@ -452,25 +447,25 @@ namespace Life2
 
                 b = (int) Math.Round(minEating * 9.0);
                 b = ToBounds(b, 0, 255);
-
-                return Color.FromArgb(r, g, b);
             }
+            else if (drawStyle == DrawType.Energy)
+            {
+                r = (int) Math.Round(energy * 2.0);
+                r = ToBounds(r, 0, 255);
 
-            r = (int) Math.Round(energy * 2.0);
-            r = ToBounds(r, 0, 255);
+                g = 50;
 
-            g = 50;
-
-            b = marker;
-            b = ToBounds(b, 0, 255);
-
+                b = marker;
+                b = ToBounds(b, 0, 255);
+            }
+            
             return Color.FromArgb(r, g, b);
         }
 
-        public static double FotFromCoord(int y, int height)
+        public static double FotFromCoordinates(int y, int height)
             => (-1 / (1 + Math.Exp(-10 * (0.7 * y / height) + 5)) + 1) * 2;
 
-        public static double MinFromCoord(int y, int height)
+        public static double MinFromCoordinates(int y, int height)
             => 1 / (1 + Math.Exp(-10 * (1.0 * y / height) + 3.5)) * 2;
     }
 }

@@ -3,7 +3,6 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 
 namespace Life2
 {
@@ -45,16 +44,8 @@ namespace Life2
         /// <summary>
         /// Карта мира
         /// </summary>
-        public int[][] map;
-        
-        static string[] MapObjects =
-        {
-            "Empty",
-            "Food",
-            "Bot",
-            "Wall"
-        };
-        
+        public ObjectType[][] map;
+
         /// <summary>
         /// Карта ботов
         /// </summary>
@@ -112,8 +103,10 @@ namespace Life2
                 .ToArray();
             
             map = File
-                .ReadLines(@"D:\Coding\C#\Life2\0.map")
-                .Select(line => line.Select(ch => ch == '*' ? 3 : 0).ToArray())
+                .ReadLines(@"3.map")
+                .Select(line => line
+                    .Select(ch => ch == '*' ? ObjectType.Wall : ObjectType.Empty)
+                    .ToArray())
                 .ToArray();
 
             for (var j = 0; j < startupBotCount; j++)
@@ -124,13 +117,13 @@ namespace Life2
                 
                 var x = Random(0, this.width - 1);
                 var y = Random(0, this.height - 1);
-                while (map[x][y] != 0 && map[x][y] == 3)
+                while (map[x][y] != ObjectType.Empty)
                 {
                     x = Random(0, this.width - 1);
                     y = Random(0, this.height - 1);
                 }
                 bots[x][y] = new Bot(this, x, y, gene);
-                map[x][y] = 2;
+                map[x][y] = ObjectType.Bot;
             }
         }
         
@@ -139,23 +132,21 @@ namespace Life2
         /// </summary>
         private void Live()
         {
-            time++;
+            time += 1;
             if (time >= DayLength)
-            {
                 time -= DayLength * 2;
-            }
             
             iteration++;
             for (var i = 0; i < width; i++)
             {
                 for (int j = 0; j < height; j++)
-                    if (map[i][j] == 2 && bots[i][j].lastIteration != iteration)
+                    if (map[i][j] == ObjectType.Bot && bots[i][j].lastIteration != iteration)
                         bots[i][j].Live(iteration);
             }
             
         }
 
-        public void Draw(Bitmap bit, int botSize, bool drawStyle)
+        public void Draw(Bitmap bit, int botSize, DrawType drawStyle)
         {
             var c = Color.White;
             for (var i = 0; i < width; i++)
@@ -164,7 +155,7 @@ namespace Life2
                 {
                     switch (map[i][j])
                     {
-                        case 2:
+                        case ObjectType.Bot:
                         {
                             var bot = bots[i][j];
                             if (bot != null)
@@ -173,10 +164,10 @@ namespace Life2
                                 Console.WriteLine(map[i][j]);
                             break;
                         }
-                        case 1:
+                        case ObjectType.Food:
                             c = Color.Gray;
                             break;
-                        case 3 when !drawStyle:
+                        case ObjectType.Wall when drawStyle == DrawType.Energy:
                             c = Color.Orange;
                             break;
                         default:
@@ -190,7 +181,7 @@ namespace Life2
                 }
             }
         }
-        public void DrawLens(Bitmap bit, int x, int y)
+        public void DrawLens(Bitmap bit, int x, int y, DrawType drawStyle)
         {
             for (var i = 0; i < 40; i++)
             {
@@ -211,22 +202,20 @@ namespace Life2
                             xx -= width;
                         else if (xx < 0)
                             xx += width;
-                        if (map[xx][yy] == 2)
+                        if (map[xx][yy] == ObjectType.Bot)
                         {
                             var bot = bots[xx][yy];
                             if (bot != null)
                             {
-                                var c = bot.GetColor(true);
+                                var c = bot.GetColor(drawStyle);
                                 for (int k = 0; k < 25; k++)
                                     bit.SetPixel(i * 5 + k / 5, j * 5 + k % 5, c);
                             }
                         }
-                        else if (map[xx][yy] == 1)
+                        else if (map[xx][yy] == ObjectType.Food)
                         {
                             for (int k = 0; k < 25; k++)
-                            {
                                 bit.SetPixel(i * 5 + k / 5, j * 5 + k % 5, Color.Gray);
-                            }
                         }
                     }
                 }
@@ -250,10 +239,10 @@ namespace Life2
                 return "";
             
             var s = new StringBuilder();
-            s.Append($"x: {x},   y: {y},   Type: {MapObjects[map[x][y]]}\r\n");
-            s.Append($"S = {Bot.FotFromCoord(y, height):f3}, M = {Bot.MinFromCoord(y, height):f3}\r\n");
+            s.Append($"x: {x},   y: {y},   Type: {map[x][y]}\r\n");
+            s.Append($"S = {Bot.FotFromCoordinates(y, height):f3}, M = {Bot.MinFromCoordinates(y, height):f3}\r\n");
             
-            if (map[x][y] != 2) 
+            if (map[x][y] != ObjectType.Bot) 
                 return s.ToString();
             
             var bot = bots[x][y];
@@ -285,9 +274,9 @@ namespace Life2
         }
         public string GetRelation(int x1, int y1, int x2, int y2)
         {
-            if (map[x1][y1] != 2)
+            if (map[x1][y1] != ObjectType.Bot)
                 return "";
-            if (map[x2][y2] != 2)
+            if (map[x2][y2] != ObjectType.Bot)
                 return "";
             
             var bot1 = bots[x1][y1];
