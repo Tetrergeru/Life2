@@ -1,71 +1,80 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 
-namespace Life
+namespace Life2
 {
     class World
     {
-        #region "Local variables"
+        public const int GeneLength = 64;
+        
         public int time;
-        public const int dayLength = 200;
+
+        private const int DayLength = 200;
+        
         public bool start = false;
-        public System.Threading.AutoResetEvent autoEvent;
-        private static ConsoleColor[] colorsFood =
-        {
-            ConsoleColor.Green, ConsoleColor.DarkGreen, ConsoleColor.Cyan, ConsoleColor.DarkCyan,  ConsoleColor.Blue , ConsoleColor.DarkBlue
-        };
-        private static ConsoleColor[] colorsEnergy =
-        {
-            ConsoleColor.White, ConsoleColor.Yellow, ConsoleColor.DarkYellow, ConsoleColor.DarkMagenta, ConsoleColor.Magenta, ConsoleColor.Red ,ConsoleColor.Green
-        };
+
         /// <summary>
         /// Номер текущей итерации мира
         /// </summary>
         private int iteration;
+        
         /// <summary>
         /// Генератор случайных чисел
         /// </summary>
-        public Random generator;
+        private readonly Random generator;
+        
         /// <summary>
         /// Использованное количество случайных чисел
         /// </summary>
-        private int randomCount = 0;
+        private int randomCount;
+        
         /// <summary>
         /// Ширина мира
         /// </summary>
-        private int width;
+        private readonly int width;
+        
         /// <summary>
         /// Высота мира
         /// </summary>
-        private int height;
+        private readonly int height;
+        
         /// <summary>
         /// Карта мира
         /// </summary>
-        public int[,] map;
-        static string[] MapObjects = new string[] {"Empty", "Food", "Bot", "Wall"};
+        public int[][] map;
+        
+        static string[] MapObjects =
+        {
+            "Empty",
+            "Food",
+            "Bot",
+            "Wall"
+        };
+        
         /// <summary>
         /// Карта ботов
         /// </summary>
-        public Bot[,] bots;
-        #endregion
-        #region "Properties" 
+        public Bot[][] bots;
+        
         /// <summary>
         /// Возвращает ширину мира
         /// </summary>
-        public int GetWidth { get { return this.width; } }
+        public int GetWidth => width;
+
         /// <summary>
         /// Возвращает высоту мира
         /// </summary>
-        public int GetHeight { get { return this.height; } }
+        public int GetHeight => height;
+
         /// <summary>
         /// Возвращает текущую итерацию
         /// </summary>
-        public int GetIteration { get { return this.iteration; } }
-        #endregion
+        public int GetIteration => iteration;
+
         /// <summary>
         /// Генерирует новое случайное число в данном диапазоне
         /// </summary>
@@ -74,238 +83,145 @@ namespace Life
         /// <returns></returns>
         public int Random(int first, int second)
         {
-            this.randomCount++;
-            return this.generator.Next(first, second);
+            randomCount++;
+            return generator.Next(first, second);
         }
+        
         /// <summary>
         /// Создаёт новый экземпляр класса мир
         /// </summary>
-        /// <param name="wdth">Ширина нового мира</param>
-        /// <param name="hght">Высота нового мира</param>
-        /// <param name="nmb">Количество ботов на момент создания</param>
+        /// <param name="width">Ширина нового мира</param>
+        /// <param name="height">Высота нового мира</param>
+        /// <param name="startupBotCount">Количество ботов на момент создания</param>
         /// <param name="seed">Зерно генерации мира</param>
-        public World(int wdth, int hght, int nmb, int seed)
+        public World(int width, int height, int startupBotCount, int seed)
         {
             time = 0;
+            generator = new Random(seed);
 
-            this.autoEvent = new System.Threading.AutoResetEvent(false);
-            this.generator = new Random(seed);
-
-            this.width = wdth;
-            this.height = hght;
+            this.width = width;
+            this.height = height;
             
-            this.map = new int[wdth,hght];
-            this.bots = new Bot[wdth, hght];
-            using (var reader = new System.IO.StreamReader(@"D:\Coding\C#\Life2\2.map"))
-            {
-                for (int i = 0; i < Life.width; i++)
-                {
-                    var s = reader.ReadLine();
-                    for (int j = 0; j < Life.height; j++)
-                    {
-                        if (s[j] == '*')
-                        {
-                            map[i, j] = 3;
-                        } 
-                    }
-                }
-            }
+            
+            bots = Enumerable
+                .Range(0, height)
+                .Select(_ => Enumerable
+                    .Range(0, height)
+                    .Select(__ => (Bot)null)
+                    .ToArray())
+                .ToArray();
+            
+            map = File
+                .ReadLines(@"D:\Coding\C#\Life2\0.map")
+                .Select(line => line.Select(ch => ch == '*' ? 3 : 0).ToArray())
+                .ToArray();
 
-            for (int j = 0; j < nmb; j++)
+            for (var j = 0; j < startupBotCount; j++)
             {
-                var gene = new int[64];
-                for (int i = 0; i < 64; i++)
-                {
+                var gene = new int[GeneLength];
+                for (var i = 0; i < GeneLength; i++)
                     gene[i] = 25;
-                }
-                int x = this.Random(0, width - 1);
-                int y = this.Random(0, height - 1);
-                while (map[x, y] != 0 && map[x, y] == 3)
+                
+                var x = Random(0, this.width - 1);
+                var y = Random(0, this.height - 1);
+                while (map[x][y] != 0 && map[x][y] == 3)
                 {
-                    x = this.Random(0, width - 1);
-                    y = this.Random(0, height - 1);
+                    x = Random(0, this.width - 1);
+                    y = Random(0, this.height - 1);
                 }
-                bots[x, y] = new Bot(this, x, y, gene);
-                map[x, y] = 2;
+                bots[x][y] = new Bot(this, x, y, gene);
+                map[x][y] = 2;
             }
         }
+        
         /// <summary>
         /// Совершает одну итерацию мира
         /// </summary>
-        public void Live()
+        private void Live()
         {
             time++;
-            if (time >= dayLength)
+            if (time >= DayLength)
             {
-                time -= dayLength * 2;
+                time -= DayLength * 2;
             }
-            //Console.WriteLine($"Live: {System.Threading.Thread.CurrentThread.Name}");
+            
             iteration++;
-            for (int i = 0; i < width; i++)
+            for (var i = 0; i < width; i++)
             {
                 for (int j = 0; j < height; j++)
-                {
-                    if (this.map[i, j] == 2 && this.bots[i, j].lastIteration != this.iteration)
-                        this.bots[i, j].Live(this.iteration);
-                }
+                    if (map[i][j] == 2 && bots[i][j].lastIteration != iteration)
+                        bots[i][j].Live(iteration);
             }
             
         }
-        /// <summary>
-        /// Выводит мир в консоль
-        /// </summary>
-        public void Write()
-        {
-            
-            Console.CursorLeft = 0;
-            Console.CursorTop = 0;
 
-            int count = 0;
-            for (int j = 0; j < height; j++)
-            {
-                for (int i = 0; i < width; i++)
-                {
-                    if (this.map[i, j] != 2)
-                        Console.Write(Life.txt[this.map[i, j]]);
-                    else
-                    {
-                        Console.ForegroundColor = bots[i,j].cl;
-                        Console.Write("o");
-                        Console.ForegroundColor = ConsoleColor.Gray;
-                    }
-                    if (this.map[i, j] == 2)
-                        count++;
-                }
-                Console.Write("|");
-                for (int i = 0; i < width; i++)
-                {
-                    if (this.map[i, j] != 2)
-                        Console.Write(Life.txt[this.map[i, j]]);
-                    else
-                    {
-                        if (bots[i, j].energy > 99)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Green;
-                        }
-                        else
-                        {
-                            Console.ForegroundColor = World.colorsEnergy[(int)Math.Floor(bots[i, j].energy / 17.0)];
-                        }
-                        Console.Write("o");
-                        Console.ForegroundColor = ConsoleColor.Gray;
-                    }
-                    if (this.map[i, j] == 2)
-                        count++;
-                }
-                Console.WriteLine();
-            }
-            //Бывший WriteCXolorLine()
-            foreach (var c in World.colorsFood)
-            {
-                Console.ForegroundColor = c;
-                Console.Write("0");
-            }
-            Console.ForegroundColor = ConsoleColor.Gray;
-            for (int i = 0; i < Console.BufferWidth - 14; i++)
-                Console.Write("-");
-            foreach (var c in World.colorsEnergy)
-            {
-                Console.ForegroundColor = c;
-                Console.Write("0");
-            }
-            Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Gray;
-            //Информация
-            Console.WriteLine($"Step: {this.iteration};                                Nuber of bots: {count};");
-            
-        }
-        public void Draw(System.Drawing.Bitmap bit, int botSize, bool drawStyle)
+        public void Draw(Bitmap bit, int botSize, bool drawStyle)
         {
-            System.Drawing.Color c = System.Drawing.Color.White;
-            for (int i = 0; i < width; i++)
+            var c = Color.White;
+            for (var i = 0; i < width; i++)
             {
-                for (int j = 0; j < height; j++)
+                for (var j = 0; j < height; j++)
                 {
-                    if (this.map[i, j] == 2)
+                    switch (map[i][j])
                     {
-                        var bot = this.bots[i, j];
-                        if (bot != null)
+                        case 2:
                         {
-                            c = bot.GetColor(drawStyle);
+                            var bot = bots[i][j];
+                            if (bot != null)
+                                c = bot.GetColor(drawStyle);
+                            else
+                                Console.WriteLine(map[i][j]);
+                            break;
                         }
-                        else
-                        {
-                            Console.WriteLine(this.map[i, j]);
-                        }
+                        case 1:
+                            c = Color.Gray;
+                            break;
+                        case 3 when !drawStyle:
+                            c = Color.Orange;
+                            break;
+                        default:
+                            c = Color.White;
+                            break;
                     }
-                    else if (this.map[i, j] == 1)
-                    {
-                        c = System.Drawing.Color.Gray;
-                    }
-                    else if (this.map[i, j] == 3 && !drawStyle)
-                    {
-                        c = System.Drawing.Color.Orange;
-                    }
-                    else
-                    {
-                        c = System.Drawing.Color.White;
-                    }
-                    if (c != System.Drawing.Color.White)
-                    {
-                        for (int k = 0; k < botSize * botSize; k++)
-                        {
-                            bit.SetPixel(i * botSize + k / botSize, j * botSize + k % botSize, c);
-                        }
-                    }
+
+                    if (c == Color.White) continue;
+                    for (var k = 0; k < botSize * botSize; k++)
+                        bit.SetPixel(i * botSize + k / botSize, j * botSize + k % botSize, c);
                 }
             }
         }
-        public void DrawLens(System.Drawing.Bitmap bit,int x, int y)
+        public void DrawLens(Bitmap bit, int x, int y)
         {
-            for (int i = 0; i < 40; i++)
+            for (var i = 0; i < 40; i++)
             {
-                for (int j = 0; j < 40; j++)
+                for (var j = 0; j < 40; j++)
                 {
-                    int xx = i + x - 20;
-                    int yy = j + y - 20;
+                    var xx = i + x - 20;
+                    var yy = j + y - 20;
 
                     if (yy == -1)
-                    {
-                        for (int k = 0; k < 10; k++)
-                        {
+                        for (var k = 0; k < 10; k++)
                             bit.SetPixel(i * 5 + k % 5, j * 5 + k / 5 + 3, Color.Black);
-                        }
-                    }
                     else if (yy == height)
-                    {
-                        for (int k = 0; k < 10; k++)
-                        {
+                        for (var k = 0; k < 10; k++)
                             bit.SetPixel(i * 5 + k % 5, j  * 5 + k / 5, Color.Black);
-                        }
-                    }
                     else if (yy >= 0 && yy < height)
                     {
-                        if (xx >= this.width)
-                        {
+                        if (xx >= width)
                             xx -= width;
-                        }
                         else if (xx < 0)
-                        {
                             xx += width;
-                        }
-                        if (map[xx, yy] == 2)
+                        if (map[xx][yy] == 2)
                         {
-                            var bot = bots[xx, yy];
+                            var bot = bots[xx][yy];
                             if (bot != null)
                             {
                                 var c = bot.GetColor(true);
                                 for (int k = 0; k < 25; k++)
-                                {
                                     bit.SetPixel(i * 5 + k / 5, j * 5 + k % 5, c);
-                                }
                             }
                         }
-                        else if (map[xx, yy] == 1)
+                        else if (map[xx][yy] == 1)
                         {
                             for (int k = 0; k < 25; k++)
                             {
@@ -316,95 +232,71 @@ namespace Life
                 }
             }
         }
-        /// <summary>
-        /// Выводит в консоль ген бота по координатам
-        /// </summary>
-        /// <param name="x"></param>
-        /// <param name="y"></param>
-        public void WriteGene(int x, int y)
-        {
-            this.bots[x, y].WriteGene();
-        }
-        public void RunThr()
+        
+        public void RunThread()
         {
             while (true)
-            {
-                while (start)
-                {
-                    this.Live();
-                    //autoEvent.WaitOne();
-                }
-            }
+            while (start)
+                Live();
         }
+        
         public string GetInfo(int x,int y)
         {
-            if (x >= width)
-            {
-                x -= width;
-            }
-            else if (x < 0)
-            {
+            if (x < 0)
                 x += width;
-            }
+            x %= width;
+            
             if (y > height || y < 0)
-            {
-                return "VOID";
-            }
+                return "";
+            
             var s = new StringBuilder();
-            s.Append($"x: {x},   y: {y},   Type: {World.MapObjects[map[x,y]]}\r\n");
+            s.Append($"x: {x},   y: {y},   Type: {MapObjects[map[x][y]]}\r\n");
             s.Append($"S = {Bot.FotFromCoord(y, height):f3}, M = {Bot.MinFromCoord(y, height):f3}\r\n");
-            if (map[x, y] == 2)
+            
+            if (map[x][y] != 2) 
+                return s.ToString();
+            
+            var bot = bots[x][y];
+            if (bot == null) 
+                return s.ToString();
+            
+            s.Append($"oE: {bot.orgEating}   sE: {bot.sunEating}   mE: {bot.minEating}\r\n");
+            var rotationParameter = false;
+            for (var i = 0; i < bot.gene.Length; i++)
             {
-                var bot = bots[x, y];
-                if (bot != null)
+                if (rotationParameter)
                 {
-                    s.Append($"oE: {bot.orgEating}   sE: {bot.sunEating}   mE: {bot.minEating}\r\n");
-                    bool rot = false;
-                    for (int i = 0; i < bot.gene.Length; i++)
+                    s.Append($"{i}:\t{bot.gene[i] % 8} ({bot.gene[i]})\r\n");
+                    rotationParameter = false;
+                }
+                else
+                {
+                    if (bot.gene[i] >= 25 && bot.gene[i] <= 39)
                     {
-                        if (rot)
-                        {
-                            s.Append($"{i}:\t{bot.gene[i] % 8} ({bot.gene[i]})\r\n");
-                            rot = false;
-                        }
-                        else
-                        {
-                            if (bot.gene[i] >= 25 && bot.gene[i] <= 39)
-                            {
-                                s.Append($"{i}:\t{Bot.commands[bot.gene[i] - 25]}\r\n");
-                                if (bot.gene[i] == 28)
-                                {
-                                    rot = true;
-                                }
-                            }
-                            else
-                            {
-                                s.Append($"{i}:\tGoto {(i + bot.gene[i]) % bot.gene.Length} ({bot.gene[i]})\r\n");
-                            }
-                        }
+                        s.Append($"{i}:\t{Bot.commands[bot.gene[i] - 25]}\r\n");
+                        if (bot.gene[i] == 28)
+                            rotationParameter = true;
                     }
+                    else
+                        s.Append($"{i}:\tGoto {(i + bot.gene[i]) % bot.gene.Length} ({bot.gene[i]})\r\n");
                 }
             }
             return s.ToString();
         }
         public string GetRelation(int x1, int y1, int x2, int y2)
         {
-            if (map[x1, y1] == 2)
-            {
-                var bot = bots[x1, y1];
-                if (bot != null)
-                {
-                    if (map[x2, y2] == 2)
-                    {
-                        var bot1 = bots[x2, y2];
-                        if (bot1 != null)
-                        {
-                            return bot.GetKin(bot1).ToString();
-                        }
-                    }
-                }
-            }
-            return "NULL";
+            if (map[x1][y1] != 2)
+                return "";
+            if (map[x2][y2] != 2)
+                return "";
+            
+            var bot1 = bots[x1][y1];
+            var bot2 = bots[x2][y2];
+
+            if (bot1 == null || bot2 == null)
+                return "";
+            
+            return bot1.GetKinship(bot2).ToString();
         }
     }
 }

@@ -1,56 +1,58 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
+using Timer = System.Windows.Forms.Timer;
 
-namespace Life
+namespace Life2
 {
-    class LifeForm : System.Windows.Forms.Form
+    class LifeForm : Form
     {
-        private World world;
-        private System.Windows.Forms.PictureBox pb;
-        private System.Windows.Forms.PictureBox lens;
-        private System.Windows.Forms.Button buttonStart;
-        private System.Windows.Forms.Button buttonDrawStyle;
+        private readonly World world;
+        
+        private readonly PictureBox worldPictureBox;
+        private readonly PictureBox lensPictureBox;
+        
+        private Bitmap worldBitmap;
+        private Bitmap lensBitmap;
+        
+        private readonly Button buttonStart;
+        private readonly Button buttonDrawStyle;
+        private readonly TextBox infoBox;
+        private readonly Thread worldThread;
+        
         private bool drawStyle = true;
-        private System.Windows.Forms.Timer timerDraw;
-        private System.Threading.Thread t;
         private string txt = "";
-        private Bitmap worldBit;
-        private Bitmap lensBit;
         private int lensX = -1;
         private int lensY = -1;
-        private TextBox infoBox;
         private int chBotX = -1;
         private int chBotY = -1;
-        public LifeForm(int width,int height)
+        
+        public LifeForm(int width, int height)
         {
-            this.Width = Life.width * Life.botSize + 18 + 50 + 200;
-            this.Height = Life.height * Life.botSize + 48;
+            Width = Life.Width * Life.BotSize + 18 + 50 + 200;
+            Height = Life.Height * Life.BotSize + 48;
 
-            worldBit = new Bitmap(1, 1);
-            lensBit = new Bitmap(1, 1);
+            worldBitmap = new Bitmap(1, 1);
+            lensBitmap = new Bitmap(1, 1);
 
-            world = new World(Life.width, Life.height, Life.nmb, 0);
-            t = new System.Threading.Thread(new System.Threading.ThreadStart(world.RunThr));
-            t.Start();
+            world = new World(Life.Width, Life.Height, Life.StartupBotCount, 0);
+            worldThread = new Thread(world.RunThread);
+            worldThread.Start();
+ 
+            worldPictureBox = new PictureBox();
+            worldPictureBox.SetBounds(0, 0, width * Life.BotSize, height * Life.BotSize);
+            worldPictureBox.MouseClick += WorldClick;
+            Controls.Add(worldPictureBox);
 
-            pb = new System.Windows.Forms.PictureBox();
-            pb.SetBounds(0, 0, width * Life.botSize, height * Life.botSize);
-            pb.MouseClick += WorldClick;
-            this.Controls.Add(pb);
+            lensPictureBox = new PictureBox();
+            lensPictureBox.SetBounds(width * Life.BotSize + 50, 0, 200, 200);
+            lensPictureBox.MouseClick += LensPictureBoxClick;
+            Controls.Add(lensPictureBox);
 
-            lens = new System.Windows.Forms.PictureBox();
-            lens.SetBounds(width * Life.botSize + 50, 0, 200, 200);
-            lens.MouseClick += LensClick;
-            this.Controls.Add(lens);
-
-            infoBox = new TextBox()
+            infoBox = new TextBox
             {
-                Left = width * Life.botSize + 50,
+                Left = width * Life.BotSize + 50,
                 Top = 200,
                 Multiline = true,
                 Width = 200,
@@ -59,64 +61,59 @@ namespace Life
                 ForeColor = Color.LawnGreen,
                 ReadOnly = true,
                 AcceptsTab = true,
+                ScrollBars = ScrollBars.Vertical
             };
-            infoBox.ScrollBars = ScrollBars.Vertical;
-            this.Controls.Add(this.infoBox);
+            Controls.Add(infoBox);
 
-            this.timerDraw = new System.Windows.Forms.Timer();
-            timerDraw.Interval = 20;
+            var timerDraw = new Timer { Interval = 20 };
             timerDraw.Tick += OnTimerDraw;
             timerDraw.Start();
 
-            this.buttonStart = new System.Windows.Forms.Button
+            buttonStart = new Button
             {
                 Text = "Run",
                 Width = 50,
                 Height = 30,
                 Top = 0,
-                Left = Life.width * Life.botSize
+                Left = Life.Width * Life.BotSize
             };
-            this.buttonStart.Click += Start;
-            this.Controls.Add(this.buttonStart);
+            buttonStart.Click += Start;
+            Controls.Add(buttonStart);
 
-            this.buttonDrawStyle = new System.Windows.Forms.Button
+            buttonDrawStyle = new Button
             {
                 Text = "Food",
                 Width = 50,
                 Height = 30,
                 Top = 40,
-                Left = Life.width * Life.botSize
+                Left = Life.Width * Life.BotSize
             };
-            this.buttonDrawStyle.Click += DrawStyle;
-            this.Controls.Add(this.buttonDrawStyle);
+            buttonDrawStyle.Click += DrawStyle;
+            Controls.Add(buttonDrawStyle);
 
-            this.FormClosed += LifeFormClosed;
+            FormClosed += LifeFormClosed;
         }
 
         private void LifeFormClosed(object sender, FormClosedEventArgs e)
         {
-            t.Abort();
+            worldThread.Abort();
             Application.Exit();
         }
         
-        private void LensClick(object sender, MouseEventArgs e)
+        private void LensPictureBoxClick(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left)
             {
-                if (lensX > -1)
-                {
-                    chBotX = this.lensX - 20 + e.X / 5;
-                    chBotY = this.lensY - 20 + e.Y / 5;
-                    this.infoBox.Text = world.GetInfo(this.lensX - 20 + e.X / 5, lensY - 20 + e.Y / 5);
-                }
+                if (lensX < 0)
+                    return;
+                
+                chBotX = lensX - 20 + e.X / 5;
+                chBotY = lensY - 20 + e.Y / 5;
+                infoBox.Text = world.GetInfo(lensX - 20 + e.X / 5, lensY - 20 + e.Y / 5);
             }
             else if (e.Button == MouseButtons.Right)
-            {
                 if (lensX > -1 && chBotX != -1)
-                {
-                    this.infoBox.Text = world.GetRelation(chBotX, chBotY, this.lensX - 20 + e.X / 5, lensY - 20 + e.Y / 5);
-                }
-            }
+                    infoBox.Text = world.GetRelation(chBotX, chBotY, lensX - 20 + e.X / 5, lensY - 20 + e.Y / 5);
         }
 
         private void WorldClick(object sender, MouseEventArgs e)
@@ -124,36 +121,38 @@ namespace Life
             if (world.start)
             {
                 Start(null,null);
-                System.Threading.Thread.Sleep(10);
+                Thread.Sleep(10);
             }
-            lensBit.Dispose();
-            lensBit = new Bitmap(200, 200);
-            lensX = e.X / Life.botSize;
-            lensY = e.Y / Life.botSize;
-            world.DrawLens(lensBit, e.X / Life.botSize, e.Y / Life.botSize);
-            lens.Image = lensBit;
+            lensBitmap.Dispose();
+            lensBitmap = new Bitmap(200, 200);
+            lensX = e.X / Life.BotSize;
+            lensY = e.Y / Life.BotSize;
+            world.DrawLens(lensBitmap, e.X / Life.BotSize, e.Y / Life.BotSize);
+            lensPictureBox.Image = lensBitmap;
         }
 
         private void Start(object sender, EventArgs e)
         {
-            this.buttonStart.Text = !world.start ? "Pause" : "Run";
+            buttonStart.Text = !world.start ? "Pause" : "Run";
             world.start = !world.start;
         }
+        
         private void DrawStyle(object sender, EventArgs e)
         {
-            this.drawStyle = !this.drawStyle;
-            this.buttonDrawStyle.Text = this.drawStyle ? "Food" : "Energy";
+            drawStyle = !drawStyle;
+            buttonDrawStyle.Text = drawStyle ? "Food" : "Energy";
         }
+        
         private void OnTimerDraw(object sender, EventArgs e)
         {
             if (world != null)
             {
                 txt = world.GetIteration.ToString();
-                this.Text = txt +" : "+ world.time.ToString();
-                worldBit.Dispose();
-                worldBit = new Bitmap(world.GetWidth*Life.botSize,world.GetHeight*Life.botSize);
-                world.Draw(worldBit, Life.botSize, drawStyle);
-                this.pb.Image = worldBit;
+                Text = txt +" : "+ world.time;
+                worldBitmap.Dispose();
+                worldBitmap = new Bitmap(world.GetWidth*Life.BotSize,world.GetHeight*Life.BotSize);
+                world.Draw(worldBitmap, Life.BotSize, drawStyle);
+                worldPictureBox.Image = worldBitmap;
             }
         }
     }

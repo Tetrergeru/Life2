@@ -5,36 +5,21 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace Life
+namespace Life2
 {
     static class Life
     {
-        public const int botSize = 2;
-        public static int width = 200;
-        public static int height = 200;
-        public static int nmb = 10;
-        public static LifeForm fm;
-
-        public static string[] txt = { " ", ".", "o" };
-        /// <summary>
-        /// Возвращает ширину матрицы (количество столбцов)
-        /// </summary>
-        public static int GetWidth<T>(this T[,] matrix)
-        {
-            return matrix.GetLength(0);
-        }
-        /// <summary>
-        /// Возвращает высоту матрицы (количество строк)
-        /// </summary>
-        public static int GetHeight<T>(this T[,] matrix)
-        {
-            return matrix.GetLength(1);
-        }
+        public const int BotSize = 2;
+        public const int Width = 200;
+        public const int Height = 200;
+        public const int StartupBotCount = 20;
+        
+        private static LifeForm _form;
 
         static void Main(string[] args)
         {
-            fm = new LifeForm(width,height);
-            Application.Run(fm);
+            _form = new LifeForm(Width,Height);
+            Application.Run(_form);
         }
     }
 }

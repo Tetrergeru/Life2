@@ -1,573 +1,476 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Security.Cryptography;
 
-namespace Life
+namespace Life2
 {
-    class Bot
+    internal class Bot
     {
-        public static string[] commands = new string[]
+        public static string[] commands =
         {
-            "Photosynthesis", "Chemosyntesis", "Look", "Rotate", "Move", "Attack", "Eat", "Clone", "Heal", "Share", "Suicide", "SetBlock", "BreakBlock", "CheckEnergy","Mine"
+            "Photosynthesis",
+            "Chemosyntesis",
+            "Look",
+            "Rotate",
+            "Move",
+            "Attack",
+            "Eat",
+            "Clone",
+            "Heal",
+            "Share",
+            "Suicide",
+            "SetBlock",
+            "BreakBlock",
+            "CheckEnergy",
+            "Mine"
         };
-        public int digs = 0;
-        private int l = 0;
+
+        private int instructionPointer;
         public int lastIteration = -1;
-        public int kills = 0;
-        public int age = 0;
-        public double minEating = 0;
-        public double sunEating = 0;
-        public double orgEating = 0;
-        public ConsoleColor cl = ConsoleColor.DarkGray;
+
+        private int marker;
+        private int kills;
+        private int age;
+
+        public double minEating;
+        public double sunEating;
+        public double orgEating;
+
         /// <summary>
         /// Мир, которому принадлежит бот
         /// </summary>
-        private World wrld;
+        private readonly World world;
+
         /// <summary>
         /// Запас энергии бота
         /// </summary>
-        public double energy;
+        private double energy;
+
         /// <summary>
         /// Запас минералов бота
         /// </summary>
-        public double minerals;
+        private double minerals;
+
         /// <summary>
         /// Здоровье бота
         /// </summary>
-        public int health;
+        private int health;
+
         /// <summary>
         /// Координаты бота
         /// </summary>
-        public (int x, int y) coord;
+        private (int x, int y) coordinates;
+
         /// <summary>
         /// Направление, в котором смотрит бот (ноль - вправо, против часовой клетки по сорок пять градусов)
         /// </summary>
         private int direction;
+
         /// <summary>
         /// Генотип бота
         /// </summary>
-        public int[] gene;
-        public Bot(World w, int en, int min, int hlth, int x, int y, int dir, int[] gene)
-        {
-            this.wrld = w;
-            this.energy = en;
-            this.minerals = min;
-            this.health = hlth;
-            this.coord = (x, y);
-            this.gene = gene;
-            this.direction = dir;
-        }
+        public readonly int[] gene;
+
         public Bot(World w, int x, int y, int[] gene)
         {
-            this.wrld = w;
-            this.energy = 10;
-            this.minerals = 0;
-            this.health = 10;
-            this.coord = (x, y);
+            world = w;
+            energy = 10;
+            minerals = 0;
+            health = 10;
+            coordinates = (x, y);
             this.gene = gene;
-            this.direction = this.wrld.Random(0,7);
+            direction = world.Random(0, 7);
         }
-        public void Live(int li)
+
+        public void Live(int lastIter)
         {
-            lastIteration = li;
-            l = 0;
-            this.age++;
+            lastIteration = lastIter;
+            age++;
+
+            instructionPointer = 0;
             minEating = 0;
             sunEating = 0;
-            orgEating = 0; ;
-            int width = wrld.GetWidth;
-            int height = wrld.GetHeight;
+            orgEating = 0;
 
-            int steps = 0;
+            var height = world.GetHeight;
 
-            this.energy -= 5;
+            energy -= 5;
+            marker += 1;
 
 
-            if (this.energy > 20 && this.wrld.Random(0, 2) == 0)
-            {
-                this.Clone();
-            }
+            if (energy > 50 && world.Random(0, 3) == 0)
+                Clone();
             else
             {
-                while (steps < 15)
+                for (var steps = 0; steps < 30;)
                 {
-                    switch (this.gene[l])
+                    switch (gene[instructionPointer])
                     {
                         //Фотосинтез
                         case 25:
-                            {
-                                //if (this.coord.y < height / 3 * 2)
-                                {
-                                    /*
-                                    sunEating += 1.2;//(2 - this.coord.y / (height / 3.0)) * (Math.Cos(Math.PI * wrld.time / World.dayLength) + 1);
-                                    this.energy += 1.2;//(2 - this.coord.y / (height / 3.0)) * (Math.Cos(Math.PI * wrld.time / World.dayLength) + 1);
-                                    //*/
-
-                                    this.energy += FotFromCoord(this.coord.y, height);
-                                    sunEating += FotFromCoord(this.coord.y, height);
-                                }
-                                l++;
-                                steps++;
-                                break;
-                            }
+                        {
+                            energy += FotFromCoord(coordinates.y, height);
+                            sunEating += FotFromCoord(coordinates.y, height);
+                            instructionPointer++;
+                            steps++;
+                            break;
+                        }
                         //Преобразует минералы в энергию
                         case 26:
+                        {
+                            if (minerals > 2)
                             {
-                                if (this.minerals > 2)
-                                {
-                                    this.minerals -= 2;
-                                    minEating += 3;
-                                    this.energy += 3;
-                                }
-                                l++;
-                                steps++;
-                                break;
+                                minerals -= 2;
+                                minEating += 3;
+                                energy += 3;
                             }
+
+                            instructionPointer++;
+                            steps++;
+                            break;
+                        }
                         //Перемещает указатель, в зависимости от того, на что смотрит бот
                         case 27:
-                            {
-                                (int x, int y) = LookAt();
-                                if (IsBlocked(x, y))
-                                {
-                                    l += 6;
-                                }
-                                else if (this.wrld.map[x, y] == 0)
-                                {
-                                    l++;
-                                }
-                                else if (this.wrld.map[x, y] == 1)
-                                {
-                                    l += 2;
-                                }
-                                else if (IsKin(this.wrld.bots[x, y]))
-                                {
-                                    l += 3;
-                                }
-                                else if (this.wrld.bots[x, y].kills > 0)
-                                {
-                                    l += 4;
-                                }
-                                else
-                                {
-                                    l += 5;
-                                }
-                                energy--;
-                                steps++;
-                                break;
-                            }
+                        {
+                            var (x, y) = LookAt();
+
+                            if (IsBlocked(x, y))
+                                instructionPointer += 6;
+                            else if (world.map[x][y] == 0)
+                                instructionPointer += 1;
+                            else if (world.map[x][y] == 1)
+                                instructionPointer += 2;
+                            else if (IsKin(world.bots[x][y]))
+                                instructionPointer += 3;
+                            else if (world.bots[x][y].kills > 0)
+                                instructionPointer += 4;
+                            else
+                                instructionPointer += 5;
+
+                            energy -= 1;
+                            steps += 1;
+                            break;
+                        }
                         //Поворачивает бота
                         case 28:
-                            {
-                                l++;
-                                l %= 64;
+                        {
+                            energy -= 1;
+                            steps += 1;
 
-                                this.direction += this.gene[l];
-                                this.direction %= 8;
+                            instructionPointer += 1;
+                            instructionPointer %= World.GeneLength;
 
-                                energy--;
-                                l++;
-                                steps++;
-                                break;
-                            }
-                        //Двигает бота в том напрвлении, куда он смотрит
+                            direction += gene[instructionPointer];
+                            direction %= 8;
+
+                            instructionPointer += 1;
+                            break;
+                        }
+                        //Двигает бота в том направлении, куда он смотрит
                         case 29:
+                        {
+                            energy -= 5;
+                            var (x, y) = LookAt();
+                            if (!IsBlocked(x, y) && world.map[x][y] != 2)
                             {
-                                energy -= 5;
-                                (int x, int y) = LookAt();
-                                if (!IsBlocked(x, y) && this.wrld.map[x, y] != 2)
+                                if (world.map[x][y] == 1)
                                 {
-                                    if (this.wrld.map[x, y] == 1)
-                                    {
-                                        orgEating += 20;
-                                        this.energy += 20;
-                                    }
-
-                                    this.wrld.map[x, y] = 2;
-                                    this.wrld.map[this.coord.x, this.coord.y] = 0;
-
-                                    this.wrld.bots[x, y] = this;
-                                    this.wrld.bots[this.coord.x, this.coord.y] = null;
-
-                                    this.coord = (x, y);
+                                    orgEating += 20;
+                                    energy += 20;
                                 }
-                                l++;
-                                steps += 5;
-                                break;
+
+                                world.map[x][y] = 2;
+                                world.map[coordinates.x][coordinates.y] = 0;
+
+                                world.bots[x][y] = this;
+                                world.bots[coordinates.x][coordinates.y] = null;
+
+                                coordinates = (x, y);
                             }
+
+                            instructionPointer++;
+                            steps += 5;
+                            break;
+                        }
                         //Атакует бота, в направлении взгляда
                         case 30:
+                        {
+                            var (x, y) = LookAt();
+                            energy -= 5;
+                            if (!IsBlocked(x, y) && world.map[x][y] == 2)
                             {
-                                (int x, int y) = LookAt();
-                                this.energy -= 5;
-                                if (!IsBlocked(x, y) && this.wrld.map[x, y] == 2)
-                                {
-                                    this.wrld.bots[x, y].Attack(20);
-                                    this.energy += 10;
-                                    if (this.wrld.map[x, y] == 1)
-                                    {
-                                        this.kills++;
-                                    }
-                                }
-                                l++;
-                                steps += 15;
-                                break;
+                                world.bots[x][y].Attack(20);
+                                energy += 10;
+                                if (world.map[x][y] == 1)
+                                    kills++;
                             }
+
+                            instructionPointer++;
+                            steps += 15;
+                            break;
+                        }
                         //Съедает еду напротив бота
                         case 31:
+                        {
+                            instructionPointer += 1;
+                            steps += 15;
+
+                            var (x, y) = LookAt();
+                            if (!IsBlocked(x, y) && world.map[x][y] == 1)
                             {
-                                (int x, int y) = LookAt();
-                                if (!IsBlocked(x, y) && this.wrld.map[x, y] == 1)
-                                {
-                                    this.wrld.map[x, y] = 0;
-                                    this.energy += 20;
-                                    orgEating += 20;
-                                }
-                                l++;
-                                steps += 15;
-                                break;
+                                world.map[x][y] = 0;
+                                energy += 20;
+                                orgEating += 20;
                             }
+
+                            break;
+                        }
                         //Бот делится
                         case 32:
-                            {
-                                this.Clone(this.direction);
-                                steps += 15;
-                                l++;
-                                break;
-                            }
+                        {
+                            instructionPointer += 1;
+                            steps += 15;
+
+                            Clone(direction);
+                            break;
+                        }
                         //Бот лечится
                         case 33:
+                        {
+                            instructionPointer++;
+                            steps += 15;
+
+                            if (energy > 5)
                             {
-                                if (this.energy > 5)
-                                {
-                                    this.energy -= 5;
-                                    this.health += 5;
-                                }
-                                l++;
-                                steps += 15;
-                                break;
+                                energy -= 5;
+                                health += 5;
                             }
+
+                            break;
+                        }
+
                         //Передаёт часть энергии другому боту
                         case 34:
+                        {
+                            instructionPointer++;
+                            steps += 15;
+
+                            var (x, y) = LookAt();
+                            if (!IsBlocked(x, y) && world.map[x][y] == 2)
                             {
-                                (int x, int y) = LookAt();
-                                if (!IsBlocked(x, y) && this.wrld.map[x, y] == 2)
-                                {
-                                    this.wrld.bots[x, y].energy += 5;
-                                    this.energy -= 5;
-                                }
-                                l++;
-                                steps += 15;
-                                break;
+                                world.bots[x][y].energy += 5;
+                                energy -= 5;
                             }
+
+                            break;
+                        }
+
                         //Убивает себя
                         case 35:
-                            {
-                                this.wrld.map[this.coord.x, this.coord.y] = 1;
-                                this.wrld.bots[this.coord.x, this.coord.y] = null;
-                                steps += 15;
-                                break;
-                            }
+                        {
+                            steps += 10000;
+
+                            world.map[coordinates.x][coordinates.y] = 1;
+                            world.bots[coordinates.x][coordinates.y] = null;
+                            break;
+                        }
                         //Разрушает блок стены
                         case 36:
-                            {
-                                if (this.energy > 5)
-                                {
-                                    (int x, int y) = LookAt();
-                                    if (y >= 0 && y < height && this.wrld.map[x, y] == 3)
-                                    {
-                                        this.wrld.map[x, y] = 0;
-                                        this.minerals += 10;
-                                        digs++;
-                                    }
-                                    this.energy -= 2;
-                                }
-                                l++;
-                                steps += 10;
+                        {
+                            instructionPointer++;
+                            steps += 10;
+
+                            if (energy <= 5)
                                 break;
+
+                            var (x, y) = LookAt();
+                            if (y >= 0 && y < height && world.map[x][y] == 3)
+                            {
+                                world.map[x][y] = 0;
+                                minerals += 11;
                             }
+
+                            energy -= 2;
+
+                            break;
+                        }
                         //Ставит блок стены
                         case 37:
+                        {
+                            instructionPointer += 1;
+                            steps += 5;
+
+                            if (minerals >= 10)
                             {
-                                if (this.minerals >= 10)
+                                var (x, y) = LookAt();
+                                if (y >= 0 && y < height && world.map[x][y] == 0)
                                 {
-                                    (int x, int y) = LookAt();
-                                    if (y >= 0 && y < height && this.wrld.map[x, y] == 0)
-                                    {
-                                        this.wrld.map[x, y] = 3;
-                                        this.minerals -= 10;
-                                    }
+                                    world.map[x][y] = 3;
+                                    minerals -= 10;
                                 }
-                                l ++;
-                                steps += 5;
-                                break;
                             }
+
+                            break;
+                        }
                         //Проверяет энергию
                         case 38:
-                            {
-                                l++;
-                                l %= gene.Length;
-                                if (1.0 * (this.energy + 200) / 200 > (gene[l] + 1) / 32.0)
-                                {
-                                    l++;
-                                }
-                                else
-                                {
-                                    l += 2;
-                                }
-                                steps++;
-                                break;
-                            }
+                        {
+                            instructionPointer += 1;
+                            steps += 1;
+
+                            instructionPointer %= gene.Length;
+                            if (1.0 * (energy + 200) / 200 > (gene[instructionPointer] + 1) / 32.0)
+                                instructionPointer += 2;
+                            else
+                                instructionPointer += 3;
+
+                            break;
+                        }
                         //Добывает минералы
                         case 39:
-                            {
-                                //this.minerals += 1.2;// + this.coord.y / (height / 3.0);
-                                this.minerals += MinFromCoord(this.coord.y,height);
-                                if (this.minerals > 100)
-                                {
-                                    this.minerals = 100;
-                                }
-                                l++;
-                                steps++;
-                                break;
-                            }
+                        {
+                            instructionPointer += 1;
+                            steps += 1;
+
+                            minerals += MinFromCoord(coordinates.y, height);
+                            if (minerals > 100)
+                                minerals = 100;
+
+                            break;
+                        }
                         default:
-                            {
-                                l += this.gene[l];
-                                steps++;
-                                break;
-                            }
+                        {
+                            instructionPointer += gene[instructionPointer];
+                            steps += 3;
+
+                            break;
+                        }
                     }
 
-                    l = l % gene.Length;
+                    instructionPointer %= World.GeneLength;
 
-                    if (this.energy > 200)
-                    {
-                        this.energy = 200;
-                    }
-                    if (this.health > 99)
-                    {
-                        this.health = 99;
-                    }
+                    if (energy > 200)
+                        energy = 200;
 
-                    if (this.health <= 0 || this.energy <= 0)
+                    if (health > 99)
+                        health = 99;
+
+                    if (health <= 0 || energy <= 0)
                     {
                         steps += 15;
-                        this.wrld.map[this.coord.x, this.coord.y] = 1;
-                        this.wrld.bots[this.coord.x, this.coord.y] = null;
+                        world.map[coordinates.x][coordinates.y] = 1;
+                        world.bots[coordinates.x][coordinates.y] = null;
                     }
                 }
             }
 
-            if (this.energy > 200)
+            if (health <= 0 || energy <= 0 || age > 50)
             {
-                this.energy = 200;
+                world.map[coordinates.x][coordinates.y] = 1;
+                world.bots[coordinates.x][coordinates.y] = null;
             }
-            if (this.health > 99)
-            {
-                this.health = 99;
-            }
-            if (this.health <= 0 || this.energy <= 0 || this.age > 50)
-            {
-                this.wrld.map[this.coord.x, this.coord.y] = 1;
-                this.wrld.bots[this.coord.x, this.coord.y] = null;
-            }
-
-            /// <summary>
-            ///double border = 1.7;
-            ///if (orgEating > sunEating && orgEating > minEating)
-            ///{
-            ///if (this.kills > 0)
-            ///this.cl = ConsoleColor.DarkRed;
-            ///else
-            ///this.cl = ConsoleColor.Yellow;
-            ///}
-            ///else if (this.kills > 0)
-            ///{
-            ///this.cl = ConsoleColor.Red;
-            ///}
-            ///else if (sunEating > minEating)
-            ///{
-            ///if (minEating == 0)
-            ///{
-            ///this.cl = ConsoleColor.Green;
-            ///}
-            ///else if (sunEating / minEating * 1.0 > border)
-            ///{
-            ///this.cl = ConsoleColor.DarkGreen;
-            ///}
-            ///else
-            ///{
-            ///this.cl = ConsoleColor.Cyan;
-            ///}
-            ///}
-            ///else
-            ///{
-            ///if (sunEating == 0)
-            ///{
-            ///this.cl = ConsoleColor.DarkBlue; ;
-            ///}
-            ///else if (minEating / sunEating * 1.0 > border)
-            ///{
-            ///this.cl = ConsoleColor.Blue;
-            ///}
-            ///else
-            ///{
-            ///this.cl = ConsoleColor.DarkCyan;
-            ///}
-            ///}
-            /// </summary>
         }
 
-        public bool IsKin(Bot b)
+        private bool IsKin(Bot b) => GetKinship(b) < 10;
+
+        public int GetKinship(Bot b)
         {
-            return GetKin(b) < 10;
-        }
-        public int GetKin(Bot b)
-        {
-            int k = 0;
-            for (int i = 0; i < 64; i++)
-            {
-                if (this.gene[i] != b.gene[i])
-                {
+            var k = 0;
+            for (var i = 0; i < 64; i++)
+                if (gene[i] != b.gene[i])
                     k++;
-                }
-            }
             return k;
         }
+
         private (int x, int y) LookAt(int d)
         {
-            int width = this.wrld.GetWidth;
-            int x = this.coord.x + (int)Math.Round(Math.Cos(Math.PI * 0.25 * d));
-            int y = this.coord.y - (int)Math.Round(Math.Sin(Math.PI * 0.25 * d));
+            var width = world.GetWidth;
+            var x = coordinates.x + (int) Math.Round(Math.Cos(Math.PI * 0.25 * d));
+            var y = coordinates.y - (int) Math.Round(Math.Sin(Math.PI * 0.25 * d));
 
-            if (x < 0)
-                x += width;
-            else if (x > width - 1)
-                x -= width;
+            x = (x + width) % width;
 
             return (x, y);
         }
-        private (int x, int y) LookAt()
-        {
-            return LookAt(this.direction);
-        }
+
+        private (int x, int y) LookAt() => LookAt(direction);
+
         private void Clone()
         {
-            int width = this.wrld.GetWidth;
-            int height = this.wrld.GetHeight;
-            
-            for (int i = 0; i < 8; i++)
-            {
-                (int x, int y) = LookAt(i);
-                if (y >= 0 && y < height && (this.wrld.map[x, y] == 0))
-                {
-                    this.energy -= 10;
-                    var g = new int[64];
-                    for (int k = 0; k < 64; k++)
-                    {
-                        g[k] = this.gene[k];
-                    }
-                    if (this.wrld.Random(0, 2) == 0)
-                    {
-                        g[this.wrld.Random(0, 63)] = this.wrld.Random(0, 63);
-                    }
-                    this.wrld.map[x, y] = 2;
-                    this.wrld.bots[x, y] = new Bot(this.wrld, x, y, g);
-                    return;
-                }
-            }
-            //this.wrld.map[this.coord.x, this.coord.y] = 1;
-            //this.wrld.bots[this.coord.x, this.coord.y] = null;
+            for (var i = 0; i < 8; i++)
+                if (Clone(i))
+                    break;
         }
-        private void Clone(int i)
+
+        private bool Clone(int i)
         {
-            int width = this.wrld.GetWidth;
-            int height = this.wrld.GetHeight;
+            var height = world.GetHeight;
+
+            var (x, y) = LookAt(i);
+            if (y < 0 || y >= height || world.map[x][y] != 0)
+                return false;
+                
+            energy -= 30;
+            var babyGene = gene.Select(_ => _).ToArray();
+
+            if (world.Random(0, 2) == 0)
+                babyGene[world.Random(0, World.GeneLength - 1)] = world.Random(0, World.GeneLength - 1);
+
+            world.map[x][y] = 2;
+            world.bots[x][y] = new Bot(world, x, y, babyGene);
             
-            (int x, int y) = LookAt(i);
-            if (y >= 0 && y < height && (this.wrld.map[x, y] == 0))
-            {
-                this.energy -= 10;
-                var g = new int[64];
-                for (int k = 0; k < 64; k++)
-                {
-                    g[k] = this.gene[k];
-                }
-                if (this.wrld.Random(0, 2) == 0)
-                {
-                    g[this.wrld.Random(0, 63)] = this.wrld.Random(0, 63);
-                }
-                this.wrld.map[x, y] = 2;
-                this.wrld.bots[x, y] = new Bot(this.wrld, x, y, g);
-                return;
-            }
+            return true;
         }
+
         private void Attack(int dmg)
         {
-            this.health -= dmg;
-            if (this.health <= 0)
+            health -= dmg;
+            if (health <= 0)
             {
-                this.wrld.map[this.coord.x, this.coord.y] = 1;
-                this.wrld.bots[this.coord.x, this.coord.y] = null;
+                world.map[coordinates.x][coordinates.y] = 1;
+                world.bots[coordinates.x][coordinates.y] = null;
             }
         }
-        public void WriteGene()
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                for (int j = 0; j < 8; j++)
-                    Console.Write($"{this.gene[i*8+j]}:");
-            }
+
+        private bool IsBlocked(int x, int y)
+            => y >= world.GetHeight || y < 0 || world.map[x][y] == 3;
+
+        private static int ToBounds(int value, int from, int to)
+            => value > to ? to : value < from ? from : value;
         
-        }
-        private bool IsBlocked(int x,int y)
+        public Color GetColor(bool drawStyle)
         {
-            return (y >= this.wrld.GetHeight || y < 0 || this.wrld.map[x, y] == 3);
-        }
-        public System.Drawing.Color GetColor(bool drawStyle)
-        {
-            int r; int g; int b;
+            int r, g, b;
             if (drawStyle)
             {
-                r = (int)Math.Round(this.orgEating * 9.0);
-                if (r > 255) { r = 255; } else if (r < 0) { r = 0; }
+                r = (int) Math.Round(orgEating * 9.0);
+                r = ToBounds(r, 0, 255);
+                
+                g = (int) Math.Round(sunEating * 9.0);
+                g = ToBounds(g, 0, 255);
 
-                g = (int)Math.Round(this.sunEating * 9.0);
-                if (g > 255) { g = 255; } else if (g < 0) { g = 0; }
+                b = (int) Math.Round(minEating * 9.0);
+                b = ToBounds(b, 0, 255);
 
-                b = (int)Math.Round(this.minEating * 9.0);
-                if (b > 255) { b = 255; } else if (b < 0) { b = 0; }
-                /*
-                if (this.kills > 0)
-                {
-                    r = 255;
-                }
-                //*/
-                return System.Drawing.Color.FromArgb(r, g, b);
+                return Color.FromArgb(r, g, b);
             }
-            else
-            {
-                r = (int)Math.Round(this.energy * 2.0);
-                if (r > 255) { r = 255; } else if (r < 0) { r = 0; }
 
-                g = 50; ;
-                if (g > 255) { g = 255; } else if (g < 0) { g = 0; }
+            r = (int) Math.Round(energy * 2.0);
+            r = ToBounds(r, 0, 255);
 
-                b = 50;
-                if (b > 255) { b = 255; } else if (b < 0) { b = 0; }
+            g = 50;
 
-                return System.Drawing.Color.FromArgb(r, g, b);
-            }
+            b = marker;
+            b = ToBounds(b, 0, 255);
+
+            return Color.FromArgb(r, g, b);
         }
+
         public static double FotFromCoord(int y, int height)
-        {
-            return (-1 / (1 + Math.Exp(-10 * (0.7 * y / height) + 5)) + 1) * 2;
-        }
+            => (-1 / (1 + Math.Exp(-10 * (0.7 * y / height) + 5)) + 1) * 2;
+
         public static double MinFromCoord(int y, int height)
-        {
-            return (1 / (1 + Math.Exp(-10 * (1.0 * y / height) + 3.5))) * 2;
-        }
+            => 1 / (1 + Math.Exp(-10 * (1.0 * y / height) + 3.5)) * 2;
     }
 }
