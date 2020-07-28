@@ -1,11 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Text;
 
 namespace Life2
 {
-    internal class Bot : IBot
+    internal class StackBot : IBot
     {
         private static string[] commands =
         {
@@ -18,12 +19,11 @@ namespace Life2
             "Eat",
             "Clone",
             "Heal",
-            "Share",
-            "Suicide",
             "SetBlock",
             "BreakBlock",
-            "CheckEnergy",
-            "Mine"
+            "Mine",
+            "Call",
+            "Ret",
         };
 
         private int instructionPointer;
@@ -70,9 +70,12 @@ namespace Life2
         /// <summary>
         /// Генотип бота
         /// </summary>
-        private readonly int[] gene;
+        private readonly List<int> gene;
 
-        public Bot(World world, int x, int y, int[] gene)
+        private readonly Stack<int> stack = new Stack<int>();
+        
+        public bool IsKiller() => kills > 0;
+        public StackBot(World world, int x, int y, List<int> gene)
         {
             this.world = world;
             energy = 10;
@@ -83,11 +86,11 @@ namespace Life2
             direction = this.world.Random(0, 7);
         }
 
-        public bool IsKiller() => kills > 0;
-
         public void Live(int iteration)
         {
-            this.lastIteration = iteration;
+            marker = 255;
+            
+            lastIteration = iteration;
             age++;
 
             instructionPointer = 0;
@@ -98,18 +101,18 @@ namespace Life2
             var height = world.GetHeight;
 
             energy -= 5;
-            marker = 50;
 
-            if (energy > 50 && world.Random(0, 3) == 0)
+
+            if (energy > 10 && world.Random(0, 3) == 0)
                 Clone();
             else
             {
                 for (var steps = 0; steps < 30;)
                 {
-                    switch (gene[instructionPointer])
+                    switch (gene[instructionPointer] % 26)
                     {
                         //Фотосинтез
-                        case 25:
+                        case 0:
                         {
                             energy += World.FotFromCoordinates(coordinates.y, height);
                             sunEating += World.FotFromCoordinates(coordinates.y, height);
@@ -118,7 +121,7 @@ namespace Life2
                             break;
                         }
                         //Преобразует минералы в энергию
-                        case 26:
+                        case 1:
                         {
                             if (minerals > 2)
                             {
@@ -132,7 +135,7 @@ namespace Life2
                             break;
                         }
                         //Перемещает указатель, в зависимости от того, на что смотрит бот
-                        case 27:
+                        case 2:
                         {
                             var (x, y) = LookAt();
 
@@ -154,7 +157,7 @@ namespace Life2
                             break;
                         }
                         //Поворачивает бота
-                        case 28:
+                        case 3:
                         {
                             energy -= 1;
                             steps += 1;
@@ -169,7 +172,7 @@ namespace Life2
                             break;
                         }
                         //Двигает бота в том направлении, куда он смотрит
-                        case 29:
+                        case 4:
                         {
                             energy -= 5;
                             var (x, y) = LookAt();
@@ -195,7 +198,7 @@ namespace Life2
                             break;
                         }
                         //Атакует бота, в направлении взгляда
-                        case 30:
+                        case 5:
                         {
                             var (x, y) = LookAt();
                             energy -= 5;
@@ -212,7 +215,7 @@ namespace Life2
                             break;
                         }
                         //Съедает еду напротив бота
-                        case 31:
+                        case 6:
                         {
                             instructionPointer += 1;
                             steps += 15;
@@ -228,7 +231,7 @@ namespace Life2
                             break;
                         }
                         //Бот делится
-                        case 32:
+                        case 7:
                         {
                             instructionPointer += 1;
                             steps += 15;
@@ -237,7 +240,7 @@ namespace Life2
                             break;
                         }
                         //Бот лечится
-                        case 33:
+                        case 8:
                         {
                             instructionPointer++;
                             steps += 15;
@@ -250,31 +253,8 @@ namespace Life2
 
                             break;
                         }
-
-                        //Передаёт часть энергии другому боту
-                        case 34:
-                        {
-                            instructionPointer++;
-                            steps += 15;
-
-                            var (x, y) = LookAt();
-                            if (!IsBlocked(x, y) && world.map[x][y] == ObjectType.Bot)
-                            {
-                                if (world.bots[x][y] is Bot bot)
-                                    bot.energy += 5;
-                                energy -= 5;
-                            }
-
-                            break;
-                        }
-                        //Убивает себя
-                        case 35:
-                        {
-                            //Die();
-                            return;
-                        }
                         //Разрушает блок стены
-                        case 36:
+                        case 9:
                         {
                             instructionPointer++;
                             steps += 10;
@@ -294,7 +274,7 @@ namespace Life2
                             break;
                         }
                         //Ставит блок стены
-                        case 37:
+                        case 10:
                         {
                             instructionPointer += 1;
                             steps += 5;
@@ -311,22 +291,8 @@ namespace Life2
 
                             break;
                         }
-                        //Проверяет энергию
-                        case 38:
-                        {
-                            instructionPointer += 1;
-                            steps += 1;
-
-                            instructionPointer %= gene.Length;
-                            if (1.0 * (energy + 200) / 200 > (gene[instructionPointer] + 1) / 32.0)
-                                instructionPointer += 2;
-                            else
-                                instructionPointer += 3;
-
-                            break;
-                        }
                         //Добывает минералы
-                        case 39:
+                        case 11:
                         {
                             instructionPointer += 1;
                             steps += 1;
@@ -337,24 +303,36 @@ namespace Life2
 
                             break;
                         }
-                        // Проверяет наличие бота
-                        case 40:
+                        // Call
+                        case 12:
                         {
-                            steps += 1;
+                            steps += 3;
+                            /*
+                            stack.Push((instructionPointer + 2) % World.GeneLength);
+                            instructionPointer += gene[instructionPointer];
+                            */
+                            break;
+                        }
+                        // Ret
+                        case 13:
+                        {
+                            steps += 3;
+                            if (stack.Count > 0)
+                            {
+                                marker = 255;
+                                instructionPointer = stack.Pop() % World.GeneLength;
+                            }
 
-                            var (x, y) = LookAt();
-                            if (!IsBlocked(x, y) && world.map[x][y] == ObjectType.Bot)
-                                instructionPointer += 1;
-                            else
-                                instructionPointer += 2;
-                            
                             break;
                         }
                         default:
                         {
-                            instructionPointer += gene[instructionPointer];
+                            //instructionPointer += gene[(instructionPointer + 1) % gene.Count];
+                            //steps += 3;
                             steps += 3;
-
+                            stack.Push((instructionPointer + 2) % World.GeneLength);
+                            instructionPointer += gene[instructionPointer];
+                            
                             break;
                         }
                     }
@@ -385,7 +363,7 @@ namespace Life2
 
         public int GetKinship(IBot ibot)
         {
-            if (!(ibot is Bot bot)) 
+            if (!(ibot is StackBot bot)) 
                 return int.MaxValue;
             
             var k = 0;
@@ -424,14 +402,14 @@ namespace Life2
             if (y < 0 || y >= height || world.map[x][y] != 0)
                 return false;
                 
-            energy -= 30;
-            var babyGene = gene.Select(_ => _).ToArray();
+            energy -= 10;
+            var babyGene = gene.Select(_ => _).ToList();
 
             if (world.Random(0, 2) == 0)
                 babyGene[world.Random(0, World.GeneLength - 1)] = world.Random(0, World.GeneLength - 1);
 
             world.map[x][y] = ObjectType.Bot;
-            world.bots[x][y] = new Bot(world, x, y, babyGene);
+            world.bots[x][y] = new StackBot(world, x, y, babyGene);
             
             return true;
         }
@@ -476,7 +454,7 @@ namespace Life2
 
                 g = 50;
 
-                b = marker;
+                b = stack.Count * 10;
                 b = ToBounds(b, 0, 255);
             }
             
@@ -489,7 +467,7 @@ namespace Life2
             
             s.Append($"oE: {orgEating}   sE: {sunEating}   mE: {minEating}\r\n");
             var rotationParameter = false;
-            for (var i = 0; i < gene.Length; i++)
+            for (var i = 0; i < gene.Count; i++)
             {
                 if (rotationParameter)
                 {
@@ -498,14 +476,15 @@ namespace Life2
                 }
                 else
                 {
-                    if (gene[i] >= 25 && gene[i] <= 39)
+                    var geneMod = gene[i] % 26;
+                    if (geneMod <= 13)
                     {
-                        s.Append($"{i}:\t{Bot.commands[gene[i] - 25]}\r\n");
-                        if (gene[i] == 28)
+                        s.Append($"{i}:\t{commands[geneMod]}({gene[i]})\r\n");
+                        if (geneMod == 3 || geneMod == 12)
                             rotationParameter = true;
                     }
                     else
-                        s.Append($"{i}:\tGoto {(i + gene[i]) % gene.Length} ({gene[i]})\r\n");
+                        s.Append($"{i}:\tGoto {(i + gene[(i + 1) % gene.Count]) % gene.Count} ({gene[i]})\r\n");
                 }
             }
             return s.ToString();

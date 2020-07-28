@@ -49,7 +49,7 @@ namespace Life2
         /// <summary>
         /// Карта ботов
         /// </summary>
-        public Bot[][] bots;
+        public IBot[][] bots;
         
         /// <summary>
         /// Возвращает ширину мира
@@ -98,12 +98,12 @@ namespace Life2
                 .Range(0, height)
                 .Select(_ => Enumerable
                     .Range(0, height)
-                    .Select(__ => (Bot)null)
+                    .Select(__ => (IBot)null)
                     .ToArray())
                 .ToArray();
             
             map = File
-                .ReadLines(@"3.map")
+                .ReadLines(@"0.map")
                 .Select(line => line
                     .Select(ch => ch == '*' ? ObjectType.Wall : ObjectType.Empty)
                     .ToArray())
@@ -111,9 +111,8 @@ namespace Life2
 
             for (var j = 0; j < startupBotCount; j++)
             {
-                var gene = new int[GeneLength];
-                for (var i = 0; i < GeneLength; i++)
-                    gene[i] = 25;
+                var stackGene = Enumerable.Range(0, GeneLength).Select(_ => 0).ToList();
+                var gene = Enumerable.Range(0, GeneLength).Select(_ => 25).ToArray();
                 
                 var x = Random(0, this.width - 1);
                 var y = Random(0, this.height - 1);
@@ -122,7 +121,10 @@ namespace Life2
                     x = Random(0, this.width - 1);
                     y = Random(0, this.height - 1);
                 }
-                bots[x][y] = new Bot(this, x, y, gene);
+                if (Random(0,1) == 0)
+                    bots[x][y] = new StackBot(this, x, y, stackGene);
+                else
+                    bots[x][y] = new Bot(this, x, y, gene);
                 map[x][y] = ObjectType.Bot;
             }
         }
@@ -139,8 +141,8 @@ namespace Life2
             iteration++;
             for (var i = 0; i < width; i++)
             {
-                for (int j = 0; j < height; j++)
-                    if (map[i][j] == ObjectType.Bot && bots[i][j].lastIteration != iteration)
+                for (var j = 0; j < height; j++)
+                    if (map[i][j] == ObjectType.Bot && bots[i][j].LastIteration() != iteration)
                         bots[i][j].Live(iteration);
             }
             
@@ -229,6 +231,12 @@ namespace Life2
                 Live();
         }
         
+        public static double FotFromCoordinates(int y, int height)
+            => (-1 / (1 + Math.Exp(-10 * (0.7 * y / height) + 5)) + 1) * 2;
+
+        public static double MinFromCoordinates(int y, int height)
+            => 1 / (1 + Math.Exp(-10 * (1.0 * y / height) + 3.5)) * 2;
+        
         public string GetInfo(int x,int y)
         {
             if (x < 0)
@@ -240,36 +248,14 @@ namespace Life2
             
             var s = new StringBuilder();
             s.Append($"x: {x},   y: {y},   Type: {map[x][y]}\r\n");
-            s.Append($"S = {Bot.FotFromCoordinates(y, height):f3}, M = {Bot.MinFromCoordinates(y, height):f3}\r\n");
+            s.Append($"S = {FotFromCoordinates(y, height):f3}, M = {MinFromCoordinates(y, height):f3}\r\n");
             
             if (map[x][y] != ObjectType.Bot) 
                 return s.ToString();
             
             var bot = bots[x][y];
-            if (bot == null) 
-                return s.ToString();
-            
-            s.Append($"oE: {bot.orgEating}   sE: {bot.sunEating}   mE: {bot.minEating}\r\n");
-            var rotationParameter = false;
-            for (var i = 0; i < bot.gene.Length; i++)
-            {
-                if (rotationParameter)
-                {
-                    s.Append($"{i}:\t{bot.gene[i] % 8} ({bot.gene[i]})\r\n");
-                    rotationParameter = false;
-                }
-                else
-                {
-                    if (bot.gene[i] >= 25 && bot.gene[i] <= 39)
-                    {
-                        s.Append($"{i}:\t{Bot.commands[bot.gene[i] - 25]}\r\n");
-                        if (bot.gene[i] == 28)
-                            rotationParameter = true;
-                    }
-                    else
-                        s.Append($"{i}:\tGoto {(i + bot.gene[i]) % bot.gene.Length} ({bot.gene[i]})\r\n");
-                }
-            }
+            if (bot != null)
+                s.Append(bot.GetInfo());
             return s.ToString();
         }
         public string GetRelation(int x1, int y1, int x2, int y2)
